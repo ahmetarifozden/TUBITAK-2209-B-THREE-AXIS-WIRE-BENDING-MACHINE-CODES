@@ -1,570 +1,140 @@
 #include <AccelStepper.h>
 #include <Servo.h>
 
-#define limitSwitch 11
+#define LIMIT_SWITCH_PIN 11
+#define SERVO_PIN 2
+#define FEEDER_STEP_PIN 5
+#define FEEDER_DIR_PIN 6
+#define Z_AXIS_STEP_PIN 7
+#define Z_AXIS_DIR_PIN 8
+#define BENDER_STEP_PIN 9
+#define BENDER_DIR_PIN 10
 
-// Define the stepper motors and the pins the will use
-AccelStepper feederStepper(1, 5, 6);  // (Type:driver, STEP, DIR)
-AccelStepper zAxisStepper(1, 7, 8);
-AccelStepper benderStepper(1, 9, 10);
+// Define the stepper motors and the pins they will use
+AccelStepper feederStepper(1, FEEDER_STEP_PIN, FEEDER_DIR_PIN);
+AccelStepper zAxisStepper(1, Z_AXIS_STEP_PIN, Z_AXIS_DIR_PIN);
+AccelStepper benderStepper(1, BENDER_STEP_PIN, BENDER_DIR_PIN);
 
 Servo servo01;
-String dataIn = "";
-String manualStatus = "";
-int count = 0;
-int dist;
-void setup() {
 
+int count = 0;
+int angleConst = 18;  // angle constant
+
+void setup() {
   Serial.begin(9600);
-  pinMode(limitSwitch, INPUT_PULLUP);
-  servo01.attach(2);
+  pinMode(LIMIT_SWITCH_PIN, INPUT_PULLUP);
+  
+  // Initialize servo and stepper motors
+  servo01.attach(SERVO_PIN);
   servo01.write(40);  // Initial position, bending pin up
-  // Stepper motors max speed
-  feederStepper.setMaxSpeed(2000);
-  zAxisStepper.setMaxSpeed(2000);
-  benderStepper.setMaxSpeed(2000);
-  // Homing
-  while (digitalRead(limitSwitch) != 0) {
-    benderStepper.setSpeed(1200);
-    benderStepper.runSpeed();
-    benderStepper.setCurrentPosition(0);  // When limit switch pressed set position to 0 steps
-  }
-  delay(40);
-  // Move 1400 steps from the limit switch to starting position
-  while (benderStepper.currentPosition() != -1400) {
-    benderStepper.setSpeed(-1200);  // if negative rotates anti-clockwise
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
+  
+  setupStepper(feederStepper, 2000);
+  setupStepper(zAxisStepper, 2000);
+  setupStepper(benderStepper, 2000);
+  
+  homing(benderStepper);
 }
 
 void loop() {
-
   String mode = Serial.readString();
+  
   if (mode.startsWith("manual")) {
-    manual();
-  }
-  if (mode.startsWith("star")) {
-    star();
-  }
-  if (mode.startsWith("cube")) {
-    cube();
-  }
-  if (mode.startsWith("stand")) {
-    stand();
+    manualMode();
+  } else if (mode.startsWith("star")) {
+    createShape("star");
+  } else if (mode.startsWith("cube")) {
+    createShape("cube");
+  } else if (mode.startsWith("stand")) {
+    createShape("stand");
   }
 }
 
-void star() {
-  while (count != 5) {
-    int feed = 38;                                             //  mm
-    int feedDistance = feed * 48;                              // 48- constats that map the mm value to number of steps the stepper show move
-    while (feederStepper.currentPosition() != feedDistance) {  // run until it reaches the distance value
-      feederStepper.setSpeed(1200);
-      feederStepper.run();
-    }
-    feederStepper.setCurrentPosition(0);  // reset the current position to 0
-    servo01.write(40);                    // Set the bender pin up
-    delay(200);
-    int angleConst = 18;  // angle constant
-    // Bend the wire 52 degrees
-    while (benderStepper.currentPosition() != -52 * angleConst) {
-      benderStepper.setSpeed(-700);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    // Go back 52 degrees to initial position
-    while (benderStepper.currentPosition() != 52 * angleConst) {
-      benderStepper.setSpeed(1200);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    // Feed the same distance again
-    while (feederStepper.currentPosition() != feedDistance) {
-      feederStepper.setSpeed(1200);
-      feederStepper.run();
-    }
-    feederStepper.setCurrentPosition(0);
-    delay(100);
-    servo01.write(130);  // Set the bender pin down
-    delay(200);
-    // Set bender to new initial position, for bending in the other direction
-    while (benderStepper.currentPosition() != -42 * angleConst) {
-      benderStepper.setSpeed(-1200);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(200);
-    servo01.write(40);  // Bender pin up
-    delay(200);
-    while (benderStepper.currentPosition() != 105 * angleConst) {
-      benderStepper.setSpeed(700);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(50);
-    while (benderStepper.currentPosition() != -63 * angleConst) {
-      benderStepper.setSpeed(-1200);
-      benderStepper.run();
-    }
-    delay(100);
-    servo01.write(130);
-    benderStepper.setCurrentPosition(0);
-    count++;
-  }
+// Setup stepper motors
+void setupStepper(AccelStepper& stepper, int maxSpeed) {
+  stepper.setMaxSpeed(maxSpeed);
 }
 
-
-void cube() {
-  int feed = 40;  //  mm
-  int feedDistance = feed * 48;
-  int angleConst = 16;
-  // Step 1
-  while (count != 3) {
-    while (feederStepper.currentPosition() != feedDistance) {
-      feederStepper.setSpeed(1200);
-      feederStepper.run();
-    }
-    feederStepper.setCurrentPosition(0);
-    delay(100);
-    while (benderStepper.currentPosition() != -90 * angleConst) {
-      benderStepper.setSpeed(-700);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    while (benderStepper.currentPosition() != 90 * angleConst) {
-      benderStepper.setSpeed(1200);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    count++;
+// Homing procedure
+void homing(AccelStepper& benderStepper) {
+  while (digitalRead(LIMIT_SWITCH_PIN) != LOW) {
+    benderStepper.setSpeed(1200);
+    benderStepper.runSpeed();
   }
-  count = 0;
-  // Step 2
-  while (zAxisStepper.currentPosition() != 88 * angleConst) {
+  benderStepper.setCurrentPosition(0);
+  moveStepperToPosition(benderStepper, -1400, 1200);
+}
+
+// General function to move stepper to position
+void moveStepperToPosition(AccelStepper& stepper, int position, int speed) {
+  stepper.setSpeed((position > 0) ? speed : -speed);
+  while (stepper.currentPosition() != position) {
+    stepper.run();
+  }
+  stepper.setCurrentPosition(0);
+}
+
+// Function for feeding wire
+void feedWire(AccelStepper& stepper, int distance) {
+  int feedSteps = distance * 48;  // convert distance to steps
+  moveStepperToPosition(stepper, feedSteps, 1200);
+}
+
+// Function for bending wire
+void bendWire(AccelStepper& benderStepper, Servo& servo, int angle, bool bendUp = true) {
+  servo.write(bendUp ? 40 : 130);
+  delay(200);
+  moveStepperToPosition(benderStepper, angle * angleConst, bendUp ? -700 : 700);
+  delay(100);
+}
+
+// Function to create different shapes
+void createShape(const String& shape) {
+  if (shape == "star") {
+    while (count != 5) {
+      feedWire(feederStepper, 38);
+      bendWire(benderStepper, servo01, 52, true);
+      feedWire(feederStepper, 38);
+      bendWire(benderStepper, servo01, 42, false);
+      count++;
+    }
+  } else if (shape == "cube") {
+    // Simplified and reused steps for cube shape
+    for (int i = 0; i < 3; i++) {
+      feedWire(feederStepper, 40);
+      bendWire(benderStepper, servo01, 90, true);
+      bendWire(benderStepper, servo01, 90, false);
+    }
     zAxisStepper.setSpeed(500);
-    zAxisStepper.run();
+    moveStepperToPosition(zAxisStepper, 88 * angleConst, 500);
+  } else if (shape == "stand") {
+    feedWire(feederStepper, 20);
+    bendWire(benderStepper, servo01, 90, true);
+    feedWire(feederStepper, 80);
+    bendWire(benderStepper, servo01, 42, false);
   }
-  zAxisStepper.setCurrentPosition(0);
-  delay(100);
-  //Step 3
-  while (count != 2) {
-    while (feederStepper.currentPosition() != feedDistance) {
-      feederStepper.setSpeed(1200);
-      feederStepper.run();
-    }
-    feederStepper.setCurrentPosition(0);
-    delay(100);
-    while (benderStepper.currentPosition() != -90 * angleConst) {
-      benderStepper.setSpeed(-700);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    while (benderStepper.currentPosition() != 90 * angleConst) {
-      benderStepper.setSpeed(1200);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    count++;
-  }
-  count = 0;
-  // Step 4
-  while (zAxisStepper.currentPosition() != 85 * angleConst) {
-    zAxisStepper.setSpeed(500);
-    zAxisStepper.run();
-  }
-  zAxisStepper.setCurrentPosition(0);
-  delay(100);
-  // Step 5
-  servo01.write(130);
-  delay(200);
-  while (benderStepper.currentPosition() != -42 * angleConst) {
-    benderStepper.setSpeed(-1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  while (count != 3) {
-    delay(100);
-    servo01.write(40);
-    delay(200);
-    // Step 6
-    while (feederStepper.currentPosition() != feedDistance) {
-      feederStepper.setSpeed(1200);
-      feederStepper.run();
-    }
-    feederStepper.setCurrentPosition(0);
-    delay(100);
-    while (benderStepper.currentPosition() != 90 * angleConst) {
-      benderStepper.setSpeed(700);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    while (benderStepper.currentPosition() != -90 * angleConst) {
-      benderStepper.setSpeed(-1200);
-      benderStepper.run();
-    }
-    benderStepper.setCurrentPosition(0);
-    delay(100);
-    count++;
-  }
-  count = 0;
+  count = 0;  // Reset the counter for the next shape
 }
 
-void stand() {
-  int feed = 20;  // mm
-  int feedDistance = feed * 48;
-  int angleConst = 16;
-  // Step 1
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != -90 * angleConst) {
-    benderStepper.setSpeed(-700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != 90 * angleConst) {
-    benderStepper.setSpeed(1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-
-  // Step 2
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != -70 * angleConst) {
-    benderStepper.setSpeed(-700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != 70 * angleConst) {
-    benderStepper.setSpeed(1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-
-  // Step 3
-  feed = 80;  // mm
-  feedDistance = feed * 48;
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-  delay(100);
-  // Step 4
-  servo01.write(130);
-  delay(200);
-  while (benderStepper.currentPosition() != -42 * angleConst) {
-    benderStepper.setSpeed(-1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  servo01.write(40);
-  delay(200);
-  while (benderStepper.currentPosition() != 108 * angleConst) {
-    benderStepper.setSpeed(700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != -66 * angleConst) {
-    benderStepper.setSpeed(-1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-
-  //Step 5
-  servo01.write(130);
-  delay(200);
-  // Step 6
-  feed = 80;  // mm
-  feedDistance = feed * 48;
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-  servo01.write(40);
-  delay(200);
-  // Step 7
-  while (zAxisStepper.currentPosition() != -90 * angleConst) {
-    zAxisStepper.setSpeed(-500);
-    zAxisStepper.run();
-  }
-  zAxisStepper.setCurrentPosition(0);
-  delay(100);
-
-  // Step 8
-  while (benderStepper.currentPosition() != -90 * angleConst) {
-    benderStepper.setSpeed(-700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != 90 * angleConst) {
-    benderStepper.setSpeed(1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  // Step 6
-  feed = 45;  // mm
-  feedDistance = feed * 48;
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-  // Step 10
-  while (benderStepper.currentPosition() != -90 * angleConst) {
-    benderStepper.setSpeed(-700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != 48 * angleConst) {
-    benderStepper.setSpeed(1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-
-  // Step 11
-  while (zAxisStepper.currentPosition() != 90 * angleConst) {
-    zAxisStepper.setSpeed(500);
-    zAxisStepper.run();
-  }
-  zAxisStepper.setCurrentPosition(0);
-  delay(100);
-  feed = 80;  // mm
-  feedDistance = feed * 48;
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-
-  // Step 12
-  while (benderStepper.currentPosition() != 110 * angleConst) {
-    benderStepper.setSpeed(700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != -68 * angleConst) {
-    benderStepper.setSpeed(-1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  //Step 13
-  servo01.write(130);
-  delay(200);
-  feed = 80;  // mm
-  feedDistance = feed * 48;
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-  servo01.write(40);
-  delay(200);
-
-  // Step 14
-  while (benderStepper.currentPosition() != -70 * angleConst) {
-    benderStepper.setSpeed(-700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != 70 * angleConst) {
-    benderStepper.setSpeed(1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-
-  //Step 15
-  feed = 25;  // mm
-  feedDistance = feed * 48;
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-  delay(100);
-  // Step 16
-  while (benderStepper.currentPosition() != -90 * angleConst) {
-    benderStepper.setSpeed(-700);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-  while (benderStepper.currentPosition() != 90 * angleConst) {
-    benderStepper.setSpeed(1200);
-    benderStepper.run();
-  }
-  benderStepper.setCurrentPosition(0);
-  delay(100);
-
-  // Step 17
-  while (feederStepper.currentPosition() != feedDistance) {
-    feederStepper.setSpeed(1200);
-    feederStepper.run();
-  }
-  feederStepper.setCurrentPosition(0);
-}
-
-void manual() {
-  int sign;
-  String dataInS;
-  int angle;
-  int angleConst;
+// Manual control mode
+void manualMode() {
   Serial.println("  // MANUAL MODE //");
-  while (!dataIn.startsWith("end")) {
-    servo01.write(130);
-    delay(200);
-    dataIn = Serial.readString();
-    if (dataIn.startsWith("f")) {
-      dataInS = dataIn.substring(1, dataIn.length());  // reads the feed value
-      dist = dataInS.toInt();
+  String command = "";
+  
+  while (!command.startsWith("end")) {
+    command = Serial.readString();
+    if (command.startsWith("f")) {
+      int distance = command.substring(1).toInt();
       Serial.print("Feed ");
-      Serial.print(dist);
+      Serial.print(distance);
       Serial.println("mm wire.");
-      dist = dist * 48;
-      while (feederStepper.currentPosition() != dist) {
-        feederStepper.setSpeed(1200);
-        feederStepper.run();
-      }
-      feederStepper.setCurrentPosition(0);
-      delay(100);
+      feedWire(feederStepper, distance);
     }
-    if (dataIn.startsWith("b")) {
-      if (dataIn.charAt(1) == '-') {
-        dataInS = dataIn.substring(2, dataIn.length());  ///reads the angle value
-        angle = dataInS.toInt();
-        Serial.print("Bend -");
-        Serial.print(angle);
-        Serial.println(" degrees.");
-        angleConst = 16;
-        // Set "negative" bending initial position
-        while (benderStepper.currentPosition() != -43 * angleConst) {
-          benderStepper.setSpeed(-1200);
-          benderStepper.run();
-        }
-        benderStepper.setCurrentPosition(0);
-        delay(100);
-        servo01.write(40);
-        delay(200);
-        // Bend the wire
-        while (benderStepper.currentPosition() != angle * angleConst) {
-          benderStepper.setSpeed(700);
-          benderStepper.run();
-        }
-        benderStepper.setCurrentPosition(0);
-        delay(100);
-        while (benderStepper.currentPosition() != (-1) * angle * angleConst) {
-          benderStepper.setSpeed(-1200);
-          benderStepper.run();
-        }
-        benderStepper.setCurrentPosition(0);
-        delay(100);
-        servo01.write(130);
-        delay(200);
-        // Get back to original "positive" bending initial poistion
-        while (benderStepper.currentPosition() != 43 * angleConst) {
-          benderStepper.setSpeed(1200);
-          benderStepper.run();
-        }
-        benderStepper.setCurrentPosition(0);
-        delay(100);
-      } else {
-        dataInS = dataIn.substring(1, dataIn.length());
-        angle = dataInS.toInt();
-        Serial.print("Bend ");
-        Serial.print(angle);
-        Serial.println(" degrees.");
-        angleConst = 16;
-        servo01.write(40);
-        delay(200);
-        while (benderStepper.currentPosition() != (-1) * angle * angleConst) {
-          benderStepper.setSpeed(-700);
-          benderStepper.run();
-        }
-        benderStepper.setCurrentPosition(0);
-        delay(100);
-        while (benderStepper.currentPosition() != angle * angleConst) {
-          benderStepper.setSpeed(1200);
-          benderStepper.run();
-        }
-        benderStepper.setCurrentPosition(0);
-        delay(100);
-      }
-      dataInS = dataIn.substring(2, dataIn.length());
-      angle = dataInS.toInt();
-      angleConst = 16;
-      while (benderStepper.currentPosition() != sign * angle * angleConst) {
-        benderStepper.setSpeed(-700);
-        benderStepper.run();
-      }
-      benderStepper.setCurrentPosition(0);
-      delay(100);
-      while (benderStepper.currentPosition() != sign * angle * angleConst) {
-        benderStepper.setSpeed(1200);
-        benderStepper.run();
-      }
-      benderStepper.setCurrentPosition(0);
-      delay(100);
+    else if (command.startsWith("b")) {
+      int angle = command.substring(1).toInt();
+      Serial.print("Bend ");
+      Serial.print(angle);
+      Serial.println(" degrees.");
+      bendWire(benderStepper, servo01, angle);
     }
-    // Z-Axis Control
-    if (dataIn.startsWith("z")) {
-      if (dataIn.charAt(1) == '-') {
-        dataInS = dataIn.substring(2, dataIn.length());
-        angle = dataInS.toInt();
-        Serial.print("Move Z-Axis -");
-        Serial.print(angle);
-        Serial.println(" degrees.");
-        angleConst = 16;
-        while (zAxisStepper.currentPosition() != angle * angleConst) {
-          zAxisStepper.setSpeed(500);
-          zAxisStepper.run();
-        }
-        zAxisStepper.setCurrentPosition(0);
-        delay(100);
-      } else {
-        dataInS = dataIn.substring(1, dataIn.length());
-        angle = dataInS.toInt();
-        Serial.print("Move Z-Axis ");
-        Serial.print(angle);
-        Serial.println(" degrees.");
-        angleConst = 16;
-        while (zAxisStepper.currentPosition() != (-1) * angle * angleConst) {
-          zAxisStepper.setSpeed(-500);
-          zAxisStepper.run();
-        }
-        zAxisStepper.setCurrentPosition(0);
-        delay(100);
-      }
-    }
-    manualStatus = dataIn;
   }
 }
