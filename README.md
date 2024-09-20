@@ -28,9 +28,6 @@ Bu proje, **Üç Eksenli Tel Bükme Makinesi** sisteminin bir parçası olarak g
 
 ## Katkıda Bulunanlar
 
-- **Proje Sahibi**: [İsminiz]
-- **Destekleyenler**: [Diğer katkıda bulunanlar]
+- **Proje Sahibi**: [Tübitak]
+- **Destekleyenler**: [Ahmet Selman Terzioğlu, Talha Demir]
 
-## Lisans
-
-Bu proje MIT Lisansı altında lisanslanmıştır. Daha fazla bilgi için `LICENSE` dosyasına göz atabilirsiniz.
